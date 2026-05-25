@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#ff9a9e">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>美好待办</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 25%, #fecfef 50%, #fbc2eb 75%, #a6c1ee 100%);
+            background-size: 400% 400%;
+            animation: romanticGradient 8s ease infinite;
+            font-family: 'Segoe UI', 'Roboto', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: max(1.5rem, env(safe-area-inset-top)) 1.5rem max(1.5rem, env(safe-area-inset-bottom));
+            position: relative;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(255, 182, 193, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(221, 160, 221, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(255, 218, 233, 0.2) 0%, transparent 40%),
+                radial-gradient(circle at 60% 60%, rgba(255, 192, 203, 0.2) 0%, transparent 40%);
+            pointer-events: none;
+            animation: floatBubbles 12s ease-in-out infinite;
+        }
+
+        .petals-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .petal {
+            position: absolute;
+            top: -30px;
+            font-size: 24px;
+            opacity: 0.7;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        }
+
+        @keyframes petalFallCustom {
+            0% { transform: translateY(0) rotate(0deg) translateX(0); opacity: 0; }
+            10% { opacity: 0.8; }
+            90% { opacity: 0.8; }
+            100% { transform: translateY(110vh) rotate(720deg) translateX(var(--sway-x, 50px)); opacity: 0; }
+        }
+
+        .todo-card {
+            max-width: 680px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.2);
+            overflow: hidden;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 10;
+            margin: auto;
+        }
+
+        .todo-header {
+            background: linear-gradient(135deg, #fff5ff 0%, #f0f9ff 100%);
+            padding: 2rem 2rem 1rem 2rem;
+            border-bottom: none;
+            position: relative;
+        }
+
+        .todo-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #ff9a9e, #fecfef, #fbc2eb, #a6c1ee, #ff9a9e);
+            background-size: 300% 100%;
+            animation: gradientShift 3s ease infinite;
+        }
+
+        .todo-header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ec4899 0%, #f472b6 50%, #db2777 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .todo-header h1::before {
+            content: "✓";
+            font-size: 1.8rem;
+            color: #ec4899;
+            font-weight: 600;
+        }
+
+        .sub {
+            display: none;
+        }
+
+        .sync-status {
+            font-size: 0.75rem;
+            margin-top: 8px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            display: inline-block;
+        }
+        .sync-status.connecting { background: #fef3c7; color: #92400e; }
+        .sync-status.online { background: #d1fae5; color: #065f46; }
+        .sync-status.offline { background: #fee2e2; color: #991b1b; }
+
+        .add-section {
+            padding: 1.5rem 2rem 1rem 2rem;
+            background: white;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            background: linear-gradient(135deg, #f5f7ff 0%, #fff5ff 100%);
+            border-radius: 50px;
+            padding: 0.3rem 0.3rem 0.3rem 1.3rem;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .input-group:focus-within {
+            border-color: #ec4899;
+            box-shadow: 0 0 0 4px rgba(236, 72, 153, 0.15);
+            background: white;
+            transform: translateY(-2px);
+        }
+        .input-group input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-size: 1rem;
+            padding: 0.9rem 0;
+            outline: none;
+            font-weight: 500;
+            color: #1f2937;
+        }
+        .input-group input::placeholder { color: #9ca3af; font-weight: 400; }
+
+        .add-btn {
+            background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+            border: none;
+            color: white;
+            font-weight: 600;
+            padding: 0.75rem 1.6rem;
+            border-radius: 50px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);
+        }
+        .add-btn:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 8px 25px rgba(236, 72, 153, 0.5); }
+
+        .stats-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.8rem 2rem 0.8rem 2rem;
+            background: linear-gradient(135deg, #fafbff 0%, #fffaff 100%);
+            border-bottom: 1px solid #f3f4f6;
+            font-size: 0.85rem;
+            color: #4b5563;
+        }
+        .counter {
+            background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-weight: 600;
+            color: #be185d;
+        }
+        .clear-done-btn {
+            background: linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%);
+            border: 1px solid #fecaca;
+            padding: 0.4rem 1.1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #dc2626;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .clear-done-btn:hover { background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); }
+
+        .todo-list-container {
+            background: #ffffff;
+            max-height: 380px;
+            overflow-y: auto;
+            padding: 0.3rem 0;
+        }
+        .todo-list { list-style: none; }
+        .todo-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 1rem 2rem;
+            border-bottom: 1px solid #f9fafb;
+            transition: all 0.2s ease;
+            animation: slideIn 0.3s ease;
+            cursor: grab;
+            user-select: none;
+        }
+        .todo-item:hover { background: linear-gradient(135deg, #fafbff 0%, #fffaff 100%); }
+        .todo-item.dragging { opacity: 0.5; transform: scale(1.02) rotate(1deg); cursor: grabbing; }
+        .todo-item.drag-over { border-top: 3px solid #ec4899; padding-top: calc(1rem - 3px); }
+        
+        .todo-check {
+            width: 1.4rem;
+            height: 1.4rem;
+            cursor: pointer;
+            accent-color: #ec4899;
+            flex-shrink: 0;
+            transition: transform 0.1s;
+        }
+        .todo-check:hover { transform: scale(1.1); }
+        
+        .todo-text {
+            flex: 1;
+            font-size: 1rem;
+            font-weight: 500;
+            color: #374151;
+            word-break: break-word;
+            padding-right: 10px;
+            transition: all 0.2s;
+        }
+        .todo-item.completed .todo-text { text-decoration: line-through; color: #9ca3af; }
+        
+        .delete-btn {
+            background: transparent;
+            border: none;
+            font-size: 1.3rem;
+            cursor: pointer;
+            color: #d1d5db;
+            padding: 6px;
+            border-radius: 8px;
+            width: 36px;
+            height: 36px;
+            opacity: 0;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .todo-item:hover .delete-btn { opacity: 1; }
+        .delete-btn:hover { color: #ef4444; background: #fef2f2; transform: scale(1.1); }
+
+        /* 已完成折叠区 */
+        .completed-section {
+            border-top: 1px solid #f3f4f6;
+        }
+        .completed-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 2rem;
+            cursor: pointer;
+            background: linear-gradient(135deg, #fafbff 0%, #fffaff 100%);
+            user-select: none;
+            transition: background 0.2s;
+        }
+        .completed-toggle:hover { background: linear-gradient(135deg, #f5f3ff 0%, #fdf2f8 100%); }
+        .completed-toggle-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #6b7280;
+        }
+        .completed-count-badge {
+            background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);
+            color: #be185d;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 1px 8px;
+            border-radius: 20px;
+        }
+        .completed-chevron {
+            font-size: 0.75rem;
+            color: #9ca3af;
+        }
+        /* 已完成弹窗 */
+        .completed-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0);
+            z-index: 200;
+            pointer-events: none;
+            transition: background 0.3s ease, backdrop-filter 0.3s ease;
+        }
+        .completed-overlay.open {
+            background: rgba(0,0,0,0.45);
+            pointer-events: all;
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+        }
+        .completed-panel {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            max-height: 85vh;
+            background: white;
+            border-radius: 24px 24px 0 0;
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.34, 1.2, 0.64, 1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .completed-overlay.open .completed-panel { transform: translateY(0); }
+        .completed-panel-header {
+            padding: 0.8rem 1.5rem 1rem;
+            background: linear-gradient(135deg, #fafbff 0%, #fffaff 100%);
+            flex-shrink: 0;
+            position: relative;
+        }
+        .completed-panel-header::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 4px;
+            background: linear-gradient(90deg, #a6c1ee, #fbc2eb, #fecfef, #a6c1ee);
+            background-size: 300% 100%;
+            animation: gradientShift 3s ease infinite;
+        }
+        .completed-panel-drag {
+            width: 40px; height: 4px;
+            background: #e5e7eb; border-radius: 2px;
+            margin: 0 auto 0.8rem;
+        }
+        .completed-panel-title {
+            font-size: 1.1rem; font-weight: 700;
+            color: #6b7280;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .completed-panel-close {
+            position: absolute; top: 1rem; right: 1.2rem;
+            width: 30px; height: 30px; border-radius: 50%;
+            border: none; background: #f3f4f6; color: #6b7280;
+            font-size: 0.9rem; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .completed-panel-close:hover { background: #fce7f3; color: #ec4899; }
+        .completed-panel-body {
+            flex: 1; overflow-y: auto;
+            padding: 0.5rem 0 1.5rem;
+        }
+        .completed-panel-body::-webkit-scrollbar { width: 4px; }
+        .completed-panel-body::-webkit-scrollbar-thumb { background: #f3f4f6; border-radius: 4px; }
+        .completed-panel-empty {
+            text-align: center; padding: 3rem 1rem;
+            color: #9ca3af; font-size: 0.9rem;
+        }
+        .completed-panel-empty span { display: block; font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .completed-list { list-style: none; }
+        .completed-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 0.75rem 2rem;
+            border-bottom: 1px solid #f9fafb;
+            background: #fafafa;
+            animation: slideIn 0.25s ease;
+        }
+        .completed-item .todo-text {
+            text-decoration: line-through;
+            color: #9ca3af;
+            font-size: 0.95rem;
+        }
+        .completed-item .todo-check { accent-color: #9ca3af; }
+        .completed-item .delete-btn { opacity: 0; }
+        .completed-item:hover .delete-btn { opacity: 1; }
+        .completed-done-time {
+            font-size: 0.7rem;
+            color: #d1d5db;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        @media (max-width: 500px) {
+            .completed-toggle { padding: 0.6rem 1rem; }
+            .completed-item { padding: 0.6rem 1rem; }
+        }
+
+        .empty-placeholder {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: #6b7280;
+        }
+        .empty-placeholder p:first-child {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        footer {
+            font-size: 0.7rem;
+            text-align: center;
+            padding: 0.8rem 1rem 0.3rem;
+            background: linear-gradient(135deg, #fafbff 0%, #fffaff 100%);
+            color: #6b7280;
+            font-weight: 500;
+        }
+        .bottom-bar {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            padding: 0.5rem 1rem 1rem;
+            background: linear-gradient(135deg, #fafbff 0%, #fffaff 100%);
+        }
+        .mini-btn {
+            font-size: 0.75rem;
+            padding: 5px 14px;
+            border-radius: 20px;
+            border: 1px solid #f3f4f6;
+            background: white;
+            color: #6b7280;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .mini-btn:hover { transform: translateY(-1px); border-color: #ec4899; color: #ec4899; }
+
+        @keyframes romanticGradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        @keyframes floatBubbles {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(30px, -30px) rotate(5deg); }
+            66% { transform: translate(-20px, 20px) rotate(-5deg); }
+        }
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .todo-list-container::-webkit-scrollbar { width: 6px; }
+        .todo-list-container::-webkit-scrollbar-track { background: #f3f4f6; border-radius: 10px; }
+        .todo-list-container::-webkit-scrollbar-thumb { background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%); border-radius: 10px; }
+        
+        @media (max-width: 500px) {
+            body { padding: 0.8rem; }
+            .todo-card { border-radius: 16px; }
+            .todo-header { padding: 1rem 1rem 0.7rem; }
+            .todo-header h1 { font-size: 1.15rem; }
+            .todo-header .sub { display: none; }
+            .sync-status { font-size: 0.7rem; padding: 2px 8px; }
+            .add-section { padding: 0.8rem 1rem 0.6rem; }
+            .input-group input { padding: 7px 0; font-size: 0.9rem; }
+            .add-btn { padding: 7px 16px; font-size: 0.85rem; }
+            .todo-item { padding: 0.75rem 1rem; }
+            .todo-text { font-size: 0.9rem; }
+            .stats-bar { padding: 0.5rem 1rem; font-size: 0.75rem; }
+            .action-bar button { font-size: 0.7rem; padding: 4px 10px; }
+            .action-bar { gap: 6px; padding:8px; }
+        }
+
+        /* 密码验证层 */
+        .lock-screen {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1.5rem;
+            z-index: 9999;
+        }
+        .lock-card {
+            max-width: 360px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.97);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.2);
+            padding: 2.5rem 2rem 2rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .lock-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #ff9a9e, #fecfef, #fbc2eb, #a6c1ee, #ff9a9e);
+            background-size: 300% 100%;
+            animation: gradientShift 3s ease infinite;
+        }
+        .lock-icon {
+            font-size: 3rem;
+            margin-bottom: 0.8rem;
+            animation: float 3s ease-in-out infinite;
+            display: block;
+        }
+        .lock-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ec4899 0%, #f472b6 50%, #db2777 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+            margin-bottom: 1.6rem;
+        }
+        .lock-input-wrap {
+            background: linear-gradient(135deg, #f5f7ff 0%, #fff5ff 100%);
+            border-radius: 50px;
+            padding: 0.3rem 0.3rem 0.3rem 1.3rem;
+            border: 2px solid transparent;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+            margin-bottom: 1rem;
+        }
+        .lock-input-wrap:focus-within {
+            border-color: #ec4899;
+            box-shadow: 0 0 0 4px rgba(236, 72, 153, 0.15);
+            background: white;
+        }
+        .lock-input-wrap input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-size: 1rem;
+            padding: 0.85rem 0;
+            outline: none;
+            font-weight: 500;
+            color: #1f2937;
+            letter-spacing: 0.1em;
+        }
+        .lock-input-wrap input::placeholder { color: #9ca3af; font-weight: 400; letter-spacing: 0; }
+        .lock-submit-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+            border: none;
+            color: white;
+            font-weight: 600;
+            padding: 0.85rem;
+            border-radius: 50px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);
+        }
+        .lock-submit-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(236, 72, 153, 0.5); }
+        .lock-error {
+            font-size: 0.85rem;
+            color: #ef4444;
+            margin-top: 0.8rem;
+            min-height: 1.2em;
+            font-weight: 500;
+        }
+        .lock-screen.hidden { display: none; }
+        .todo-card.hidden { display: none; }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.4s ease; }
+
+        /* 留言按钮（内联在 bottom-bar） */
+        .note-fab-inline {
+            position: relative;
+            background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%) !important;
+            color: white !important;
+            border-color: transparent !important;
+            font-weight: 600 !important;
+        }
+        .note-fab-inline:hover { border-color: transparent !important; color: white !important; }
+        .note-fab-inline.hidden { display: none; }
+        .note-fab-inline.has-unread { animation: fabPulse 2s ease-in-out infinite; }
+        @keyframes fabPulse {
+            0%, 100% { box-shadow: 0 2px 8px rgba(236, 72, 153, 0.4); }
+            50% { box-shadow: 0 2px 16px rgba(236, 72, 153, 0.8); }
+        }
+        .fab-badge {
+            position: absolute;
+            top: -6px; right: -6px;
+            background: #ef4444;
+            color: white;
+            font-size: 0.6rem;
+            font-weight: 700;
+            min-width: 16px;
+            height: 16px;
+            border-radius: 8px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 0 3px;
+            border: 2px solid white;
+            animation: badgePop 0.3s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        .fab-badge.show { display: flex; }
+        @keyframes badgePop { from { transform: scale(0); } to { transform: scale(1); } }
+        /* 留言面板 overlay */
+        .note-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0);
+            z-index: 200;
+            pointer-events: none;
+            transition: background 0.3s ease, backdrop-filter 0.3s ease;
+        }
+        .note-overlay.open {
+            background: rgba(0,0,0,0.45);
+            pointer-events: all;
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+        }
+        .note-panel {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            max-height: 88vh;
+            background: white;
+            border-radius: 24px 24px 0 0;
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.34, 1.2, 0.64, 1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .note-overlay.open .note-panel { transform: translateY(0); }
+        .note-panel-header {
+            padding: 0.8rem 1.5rem 1rem;
+            background: linear-gradient(135deg, #fff5ff 0%, #f0f9ff 100%);
+            flex-shrink: 0;
+            position: relative;
+        }
+        .note-panel-header::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 4px;
+            background: linear-gradient(90deg, #ff9a9e, #fecfef, #fbc2eb, #a6c1ee, #ff9a9e);
+            background-size: 300% 100%;
+            animation: gradientShift 3s ease infinite;
+        }
+        .note-drag-bar {
+            width: 40px; height: 4px;
+            background: #e5e7eb;
+            border-radius: 2px;
+            margin: 0 auto 0.8rem;
+        }
+        .note-panel-title {
+            font-size: 1.1rem; font-weight: 700;
+            background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+            background-clip: text; -webkit-background-clip: text; color: transparent;
+        }
+        .note-close-btn {
+            position: absolute; top: 1rem; right: 1.2rem;
+            width: 30px; height: 30px; border-radius: 50%;
+            border: none; background: #f3f4f6; color: #6b7280;
+            font-size: 0.9rem; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .note-close-btn:hover { background: #fce7f3; color: #ec4899; }
+        /* 写留言区 */
+        .note-compose {
+            padding: 1rem 1.5rem 0.8rem;
+            border-bottom: 1px solid #f3f4f6;
+            flex-shrink: 0;
+        }
+        .note-textarea {
+            width: 100%; border: 2px solid #f3f4f6; border-radius: 16px;
+            padding: 0.85rem 1rem; font-size: 0.95rem; font-family: inherit;
+            resize: none; outline: none; color: #374151;
+            background: #fafbff; transition: all 0.3s;
+            min-height: 80px; max-height: 130px; line-height: 1.6;
+        }
+        .note-textarea:focus { border-color: #ec4899; box-shadow: 0 0 0 4px rgba(236,72,153,0.1); background: white; }
+        .note-textarea::placeholder { color: #9ca3af; }
+        .note-compose-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 0.6rem; }
+        .note-char-count { font-size: 0.75rem; color: #9ca3af; }
+        .note-send-btn {
+            background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+            border: none; color: white; font-weight: 600;
+            padding: 0.5rem 1.3rem; border-radius: 50px; font-size: 0.9rem;
+            cursor: pointer; transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(236,72,153,0.35);
+        }
+        .note-send-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(236,72,153,0.5); }
+        .note-send-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        /* 留言列表 */
+        .note-list-section { flex: 1; overflow-y: auto; padding: 0.5rem 1.5rem 2rem; }
+        .note-list-label { font-size: 0.75rem; color: #9ca3af; font-weight: 600; letter-spacing: 0.05em; padding: 0.8rem 0 0.4rem; }
+        .note-empty { text-align: center; padding: 2.5rem 1rem; color: #9ca3af; font-size: 0.9rem; }
+        .note-empty span { display: block; font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .note-card {
+            background: white; border-radius: 16px; padding: 1rem 1.1rem;
+            margin-bottom: 0.75rem; border: 1.5px solid #f3f4f6;
+            transition: all 0.3s ease; animation: noteSlideIn 0.3s ease;
+            position: relative; overflow: hidden;
+        }
+        @keyframes noteSlideIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+        .note-card.unread {
+            border-color: #fce7f3;
+            background: linear-gradient(135deg, #fff5ff 0%, #fdf2f8 100%);
+            box-shadow: 0 4px 16px rgba(236,72,153,0.1), 0 0 0 1px rgba(236,72,153,0.08);
+        }
+        .note-card.unread::before {
+            content: ''; position: absolute; left:0; top:0; bottom:0; width:3px;
+            background: linear-gradient(180deg, #ec4899, #f472b6); border-radius: 3px 0 0 3px;
+        }
+        .note-card-top { display: flex; gap: 8px; margin-bottom: 0.5rem; }
+        .note-unread-dot {
+            width: 8px; height: 8px; border-radius: 50%; background: #ec4899;
+            flex-shrink: 0; margin-top: 5px;
+            animation: dotPulse 2s ease-in-out infinite;
+        }
+        @keyframes dotPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(1.3)} }
+        .note-content { font-size: 0.95rem; color: #374151; line-height: 1.6; flex:1; word-break:break-word; white-space:pre-wrap; }
+        .note-card-bottom { display:flex; justify-content:space-between; align-items:center; margin-top:0.5rem; }
+        .note-time { font-size: 0.75rem; color: #9ca3af; }
+        .note-read-btn {
+            font-size: 0.75rem; padding: 3px 10px; border-radius: 20px;
+            border: 1px solid #fce7f3; background: white; color: #ec4899;
+            cursor: pointer; font-weight: 600; transition: all 0.2s;
+        }
+        .note-read-btn:hover { background: #fce7f3; }
+        .note-read-label { font-size: 0.75rem; color: #d1d5db; }
+        .note-list-section::-webkit-scrollbar { width: 4px; }
+        .note-list-section::-webkit-scrollbar-thumb { background: #fce7f3; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<div class="petals-container" id="petalsContainer"></div>
+
+<!-- 密码验证层 -->
+<div class="lock-screen" id="lockScreen">
+    <div class="lock-card">
+        <span class="lock-icon">🔐</span>
+        <div class="lock-title">请输入口令</div>
+        <div class="lock-input-wrap">
+            <input type="password" id="lockInput" placeholder="请输入口令..." autocomplete="off" maxlength="20">
+        </div>
+        <button class="lock-submit-btn" id="lockSubmitBtn">确认进入</button>
+        <div class="lock-error" id="lockError"></div>
+    </div>
+</div>
+
+<div class="todo-card hidden" id="mainCard">
+    <div class="todo-header">
+        <h1>下一步待办</h1>
+        <div class="sub">🌍 多人实时同步 · 所有设备看到同一份清单</div>
+        <div class="sync-status connecting" id="syncStatus">🔗 连接云端中...</div>
+    </div>
+
+    <div class="add-section">
+        <div class="input-group">
+            <input type="text" id="taskInput" placeholder="写下下一步需要做的事情..." autocomplete="off">
+            <button class="add-btn" id="addTaskBtn">+ 添加</button>
+        </div>
+    </div>
+
+    <div class="stats-bar">
+        <span>📋 任务清单</span>
+        <span><span id="pendingCount">0</span> 项待办 · 总计 <span id="totalCount">0</span></span>
+        <button class="clear-done-btn" id="clearCompletedBtn">✓ 清除已完成</button>
+    </div>
+
+    <div class="todo-list-container">
+        <ul class="todo-list" id="todoList">
+        </ul>
+    </div>
+
+    <!-- 已完成触发行 -->
+    <div class="completed-section" id="completedSection" style="display:none">
+        <div class="completed-toggle" id="completedToggle">
+            <div class="completed-toggle-left">
+                <span>✓ 已完成</span>
+                <span class="completed-count-badge" id="completedCountBadge">0</span>
+            </div>
+            <span class="completed-chevron">›</span>
+        </div>
+    </div>
+    <footer>
+        ⚡ 任意设备添加/修改/勾选 都是实时同步！
+    </footer>
+    <div class="bottom-bar">
+        <button class="mini-btn" onclick="fetchTasks()">🔄 刷新获取最新</button>
+        <button class="mini-btn" onclick="clearCompleted()">🧹 清理已完成</button>
+        <button class="mini-btn note-fab-inline hidden" id="noteFab">
+            💌 留言
+            <span class="fab-badge" id="noteBadge"></span>
+        </button>
+    </div>
+</div>
+
+<!-- 留言面板 -->
+<div class="note-overlay" id="noteOverlay">
+    <div class="note-panel">
+        <div class="note-panel-header">
+            <div class="note-drag-bar"></div>
+            <div class="note-panel-title">💌 留言板</div>
+            <button class="note-close-btn" id="noteCloseBtn">✕</button>
+        </div>
+        <div class="note-compose">
+            <textarea class="note-textarea" id="noteTextarea" placeholder="写下你想说的话..." maxlength="200"></textarea>
+            <div class="note-compose-footer">
+                <span class="note-char-count" id="noteCharCount">0 / 200</span>
+                <button class="note-send-btn" id="noteSendBtn">发送 💌</button>
+            </div>
+        </div>
+        <div class="note-list-section">
+            <div class="note-list-label">留言记录</div>
+            <div id="noteList"></div>
+        </div>
+    </div>
+</div>
+
+<!-- 已完成弹窗 -->
+<div class="completed-overlay" id="completedOverlay">
+    <div class="completed-panel">
+        <div class="completed-panel-header">
+            <div class="completed-panel-drag"></div>
+            <div class="completed-panel-title">
+                ✓ 已完成
+                <span class="completed-count-badge" id="completedCountBadge2"></span>
+            </div>
+            <button class="completed-panel-close" id="completedPanelClose">✕</button>
+        </div>
+        <div class="completed-panel-body">
+            <ul class="completed-list" id="completedList"></ul>
+        </div>
+    </div>
+</div>
+
+<script>
+// 密码验证
+(function() {
+    const PASS_HASH = '69036cd17dc186f060c821a8dc4b452b92c3a149fb53aea51cfbf468eca269d9';
+    const lockScreen = document.getElementById('lockScreen');
+    const mainCard = document.getElementById('mainCard');
+    const lockInput = document.getElementById('lockInput');
+    const lockSubmitBtn = document.getElementById('lockSubmitBtn');
+    const lockError = document.getElementById('lockError');
+
+    async function sha256(str) {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function tryUnlock() {
+        const hash = await sha256(lockInput.value);
+        if (hash === PASS_HASH) {
+            lockInput.blur();
+            setTimeout(() => {
+                lockScreen.classList.add('hidden');
+                mainCard.classList.remove('hidden');
+                document.getElementById('noteFab').classList.remove('hidden');
+                // 强制浏览器重新计算布局，修复键盘收起后 viewport 高度未恢复导致的居中失效
+                document.body.style.minHeight = '';
+                requestAnimationFrame(() => {
+                    window.scrollTo(0, 0);
+                    document.body.style.minHeight = '';
+                });
+                fetchTasks();
+            }, 350);
+        } else {
+            lockError.textContent = '口令错误，请重试';
+            lockInput.value = '';
+            lockInput.focus();
+            const card = lockScreen.querySelector('.lock-card');
+            card.classList.remove('shake');
+            void card.offsetWidth;
+            card.classList.add('shake');
+        }
+    }
+
+    lockSubmitBtn.addEventListener('click', tryUnlock);
+    lockInput.addEventListener('keypress', e => e.key === 'Enter' && tryUnlock());
+})();
+
+// 内置配置 - 你的 Bin ID
+const BIN_ID = '6a0c2c17ee5a733b12e304e3';
+const API_KEY = '';
+
+let tasks = [];
+let notes = [];
+let completedTasks = [];
+const todoListEl = document.getElementById('todoList');
+const taskInput = document.getElementById('taskInput');
+const addBtn = document.getElementById('addTaskBtn');
+const clearCompletedBtn = document.getElementById('clearCompletedBtn');
+const pendingCountSpan = document.getElementById('pendingCount');
+const totalCountSpan = document.getElementById('totalCount');
+const syncStatusEl = document.getElementById('syncStatus');
+
+function updateSyncStatus(status, text) {
+    syncStatusEl.className = 'sync-status ' + status;
+    syncStatusEl.innerText = text;
+}
+
+
+async function fetchTasks() {
+    updateSyncStatus('connecting', '🔄 同步中...');
+    try {
+        const headers = {};
+        if (API_KEY) headers['X-Access-Key'] = API_KEY;
+        const res = await axios.get(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, { headers });
+        let raw = res.data.record;
+        if (Array.isArray(raw)) {
+            tasks = raw.filter(t => !t.completed);
+            completedTasks = raw.filter(t => t.completed);
+            notes = [];
+        } else if (raw && typeof raw === 'object') {
+            const allTasks = raw.tasks || raw.data || [];
+            tasks = Array.isArray(allTasks) ? allTasks.filter(t => !t.completed) : [];
+            completedTasks = Array.isArray(raw.completedTasks)
+                ? raw.completedTasks
+                : (Array.isArray(allTasks) ? allTasks.filter(t => t.completed) : []);
+            notes = Array.isArray(raw.notes) ? raw.notes : [];
+        } else {
+            tasks = [];
+            completedTasks = [];
+            notes = [];
+        }
+        renderTodoList();
+        renderCompletedList();
+        updateNoteBadge();
+        updateSyncStatus('online', '✅ 已连接云端 · 点刷新获取最新');
+    } catch(e) {
+        console.error(e);
+        updateSyncStatus('offline', '❌ 连接失败 · 点击刷新重试');
+    }
+}
+
+async function pushData() {
+    updateSyncStatus('connecting', '💾 保存中...');
+    try {
+        const headers = {'Content-Type': 'application/json'};
+        if (API_KEY) headers['X-Access-Key'] = API_KEY;
+        await axios.put(`https://api.jsonbin.io/v3/b/${BIN_ID}`, { tasks, completedTasks, notes }, { headers });
+        setTimeout(() => fetchTasks(), 300);
+    } catch(e) {
+        console.error(e);
+        updateSyncStatus('offline', '❌ 保存失败');
+    }
+}
+
+function updateStats() {
+    const total = tasks.length + completedTasks.length;
+    const pending = tasks.length;
+    totalCountSpan.innerText = total;
+    pendingCountSpan.innerText = pending;
+}
+
+function renderTodoList() {
+    todoListEl.innerHTML = '';
+    const pending = tasks.filter(t => !t.completed);
+    if (pending.length === 0) {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'empty-placeholder';
+        emptyDiv.innerHTML = `<p>🎯✨</p><p>暂时没有待办事项</p><p style="font-size:0.8rem; margin-top:8px; opacity:0.8;">添加一项「下一步要做的事情」吧</p>`;
+        todoListEl.appendChild(emptyDiv);
+        updateStats();
+        setupDragAndDrop();
+        return;
+    }
+    pending.sort((a,b) => (a.order||0) - (b.order||0));
+    pending.forEach(task => {
+        const li = document.createElement('li');
+        li.className = 'todo-item';
+        li.setAttribute('data-id', task.id || 'tmp_' + Math.random());
+        li.draggable = true;
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'todo-check';
+        checkbox.checked = false;
+        checkbox.setAttribute('data-text', task.text);
+        const textSpan = document.createElement('span');
+        textSpan.className = 'todo-text';
+        textSpan.innerText = task.text;
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-btn';
+        delBtn.setAttribute('data-text', task.text);
+        delBtn.innerHTML = '🗑️';
+        li.appendChild(checkbox);
+        li.appendChild(textSpan);
+        li.appendChild(delBtn);
+        todoListEl.appendChild(li);
+    });
+    updateStats();
+    setupDragAndDrop();
+}
+
+function formatCompletedTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const now = new Date();
+    const diff = now - d;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return '刚刚';
+    if (mins < 60) return `${mins}分钟前`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}小时前`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}天前`;
+    return `${d.getMonth()+1}/${d.getDate()}`;
+}
+
+function renderCompletedList() {
+    const section = document.getElementById('completedSection');
+    const listEl = document.getElementById('completedList');
+    const badge = document.getElementById('completedCountBadge');
+    const badge2 = document.getElementById('completedCountBadge2');
+    if (!section || !listEl) return;
+
+    if (completedTasks.length === 0) {
+        section.style.display = 'none';
+        listEl.innerHTML = '<li><div class="completed-panel-empty"><span>🎉</span>还没有已完成的任务</div></li>';
+        return;
+    }
+    section.style.display = 'block';
+    badge.textContent = completedTasks.length;
+    if (badge2) badge2.textContent = completedTasks.length;
+    listEl.innerHTML = '';
+    completedTasks.forEach((task, idx) => {
+        const li = document.createElement('li');
+        li.className = 'completed-item';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'todo-check';
+        checkbox.checked = true;
+        checkbox.setAttribute('data-idx', idx);
+        const textSpan = document.createElement('span');
+        textSpan.className = 'todo-text';
+        textSpan.innerText = task.text;
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'completed-done-time';
+        timeSpan.textContent = formatCompletedTime(task.completedAt);
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-btn';
+        delBtn.setAttribute('data-idx', idx);
+        delBtn.innerHTML = '🗑️';
+        li.appendChild(checkbox);
+        li.appendChild(textSpan);
+        li.appendChild(timeSpan);
+        li.appendChild(delBtn);
+        listEl.appendChild(li);
+    });
+}
+
+// 已完成列表：取消勾选 → 移回待办
+document.getElementById('completedList').addEventListener('change', async (e) => {
+    if (e.target.classList.contains('todo-check')) {
+        const idx = parseInt(e.target.getAttribute('data-idx'));
+        const [task] = completedTasks.splice(idx, 1);
+        task.completed = false;
+        delete task.completedAt;
+        task.order = tasks.length > 0 ? Math.max(...tasks.map(t => t.order||0)) + 1 : 0;
+        tasks.push(task);
+        renderTodoList();
+        renderCompletedList();
+        await pushData();
+    }
+});
+
+// 已完成列表：删除
+document.getElementById('completedList').addEventListener('click', async (e) => {
+    if (e.target.classList.contains('delete-btn')) {
+        const idx = parseInt(e.target.getAttribute('data-idx'));
+        completedTasks.splice(idx, 1);
+        renderCompletedList();
+        await pushData();
+    }
+});
+
+// 已完成弹窗开关
+function openCompletedPanel() {
+    document.getElementById('completedOverlay').classList.add('open');
+}
+function closeCompletedPanel() {
+    document.getElementById('completedOverlay').classList.remove('open');
+}
+document.getElementById('completedToggle').addEventListener('click', openCompletedPanel);
+document.getElementById('completedPanelClose').addEventListener('click', closeCompletedPanel);
+document.getElementById('completedOverlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('completedOverlay')) closeCompletedPanel();
+});
+
+async function addNewTask() {
+    const text = taskInput.value.trim();
+    if (!text) return;
+    tasks.push({
+        id: Date.now() + '_' + Math.floor(Math.random()*10000),
+        text: text,
+        completed: false,
+        order: tasks.length > 0 ? Math.max(...tasks.map(t => t.order || 0)) + 1 : 0
+    });
+    taskInput.value = '';
+    taskInput.focus();
+    await pushData();
+}
+
+todoListEl.addEventListener('change', async (e) => {
+    if (e.target.classList.contains('todo-check')) {
+        const text = e.target.getAttribute('data-text');
+        const idx = tasks.findIndex(t => t.text === text);
+        if (idx !== -1) {
+            const [task] = tasks.splice(idx, 1);
+            task.completed = true;
+            task.completedAt = new Date().toISOString();
+            completedTasks.unshift(task);
+            renderTodoList();
+            renderCompletedList();
+            await pushData();
+        }
+    }
+});
+
+todoListEl.addEventListener('click', async (e) => {
+    if (e.target.classList.contains('delete-btn')) {
+        const text = e.target.getAttribute('data-text');
+        tasks = tasks.filter(t => t.text !== text);
+        await pushData();
+    }
+});
+
+async function clearCompletedTasks() {
+    // 把主列表中已勾选的也移入已完成（兼容旧数据中 completed:true 的项）
+    const stillCompleted = tasks.filter(t => t.completed);
+    stillCompleted.forEach(t => { t.completedAt = t.completedAt || new Date().toISOString(); });
+    completedTasks = [...stillCompleted, ...completedTasks];
+    tasks = tasks.filter(t => !t.completed);
+    renderTodoList();
+    renderCompletedList();
+    await pushData();
+}
+
+addBtn.addEventListener('click', addNewTask);
+taskInput.addEventListener('keypress', e => e.key === 'Enter' && addNewTask());
+clearCompletedBtn.addEventListener('click', clearCompletedTasks);
+
+let draggedElement = null, draggedIndex = null;
+let autoScrollTimer = null;
+
+function stopAutoScroll() {
+    if (autoScrollTimer) { clearInterval(autoScrollTimer); autoScrollTimer = null; }
+}
+
+function startAutoScroll(scrollEl, direction) {
+    stopAutoScroll();
+    autoScrollTimer = setInterval(() => { scrollEl.scrollTop += direction * 8; }, 16);
+}
+
+function setupDragAndDrop() {
+    const listContainer = document.querySelector('.todo-list');
+    if (!listContainer) return;
+    const scrollEl = document.querySelector('.todo-list-container');
+
+    listContainer.addEventListener('dragstart', async (e) => {
+        if (e.target.classList.contains('todo-item')) {
+            draggedElement = e.target;
+            const text = draggedElement.querySelector('.todo-text').innerText;
+            draggedIndex = tasks.findIndex(t => t.text === text);
+            setTimeout(() => draggedElement.classList.add('dragging'), 0);
+        }
+    });
+    listContainer.addEventListener('dragend', (e) => {
+        stopAutoScroll();
+        if (e.target.classList.contains('todo-item')) e.target.classList.remove('dragging');
+        draggedElement = draggedIndex = null;
+        document.querySelectorAll('.todo-item').forEach(i => i.classList.remove('drag-over'));
+    });
+    listContainer.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        // 自动滚动：鼠标靠近容器上下边缘 60px 时触发
+        if (scrollEl) {
+            const rect = scrollEl.getBoundingClientRect();
+            const threshold = 60;
+            if (e.clientY < rect.top + threshold) {
+                startAutoScroll(scrollEl, -1);
+            } else if (e.clientY > rect.bottom - threshold) {
+                startAutoScroll(scrollEl, 1);
+            } else {
+                stopAutoScroll();
+            }
+        }
+        const ae = getDragAfterElement(listContainer, e.clientY);
+        if (ae && ae !== draggedElement) {
+            ae.classList.add('drag-over');
+            document.querySelectorAll('.todo-item').forEach(i => { if (i !== ae) i.classList.remove('drag-over'); });
+        }
+    });
+    listContainer.addEventListener('dragleave', (e) => { if (e.target.classList.contains('todo-item')) e.target.classList.remove('drag-over'); });
+    listContainer.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        stopAutoScroll();
+        const ae = getDragAfterElement(listContainer, e.clientY);
+        if (draggedElement && draggedIndex !== null && draggedIndex >= 0) {
+            let newIdx;
+            if (ae) {
+                ae.classList.remove('drag-over');
+                const aetext = ae.querySelector('.todo-text').innerText;
+                newIdx = tasks.findIndex(t => t.text === aetext);
+            } else {
+                newIdx = tasks.length - 1;
+            }
+            const [item] = tasks.splice(draggedIndex, 1);
+            tasks.splice(newIdx, 0, item);
+            tasks.forEach((t, idx) => t.order = idx);
+            await pushData();
+        }
+    });
+}
+function getDragAfterElement(c, y) {
+    return [...c.querySelectorAll('.todo-item:not(.dragging)')].reduce((cl, child) => {
+        const b = child.getBoundingClientRect(), o = y - b.top - b.height/2;
+        return (o < 0 && o > cl.offset) ? { offset: o, element: child } : cl;
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+// 留言功能
+function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function timeAgo(iso) {
+    const diff = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return '刚刚';
+    if (m < 60) return `${m}分钟前`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}小时前`;
+    return `${Math.floor(h / 24)}天前`;
+}
+
+function updateNoteBadge() {
+    const unread = notes.filter(n => !n.read).length;
+    const badge = document.getElementById('noteBadge');
+    const fab = document.getElementById('noteFab');
+    if (!badge || !fab) return;
+    if (unread > 0) {
+        badge.textContent = unread > 99 ? '99+' : unread;
+        badge.classList.add('show');
+        fab.classList.add('has-unread');
+    } else {
+        badge.classList.remove('show');
+        fab.classList.remove('has-unread');
+    }
+}
+
+function renderNotes() {
+    const listEl = document.getElementById('noteList');
+    if (!listEl) return;
+    if (notes.length === 0) {
+        listEl.innerHTML = '<div class="note-empty"><span>💌</span>还没有留言，写下第一条吧</div>';
+        return;
+    }
+    const sorted = [...notes].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    listEl.innerHTML = sorted.map(n => `
+        <div class="note-card ${n.read ? '' : 'unread'}">
+            <div class="note-card-top">
+                ${!n.read ? '<div class="note-unread-dot"></div>' : ''}
+                <span class="note-content">${escapeHtml(n.content)}</span>
+            </div>
+            <div class="note-card-bottom">
+                <span class="note-time">${timeAgo(n.createdAt)}</span>
+                ${!n.read
+                    ? `<button class="note-read-btn" onclick="markNoteRead('${n.id}')">标记已读 ✓</button>`
+                    : '<span class="note-read-label">✓ 已读</span>'
+                }
+            </div>
+        </div>
+    `).join('');
+    updateNoteBadge();
+}
+
+async function markNoteRead(id) {
+    const note = notes.find(n => n.id === id);
+    if (note && !note.read) {
+        note.read = true;
+        renderNotes();
+        await pushData();
+    }
+}
+
+async function sendNote() {
+    const textarea = document.getElementById('noteTextarea');
+    const content = textarea.value.trim();
+    if (!content) return;
+    const btn = document.getElementById('noteSendBtn');
+    btn.disabled = true;
+    notes.push({
+        id: Date.now() + '_' + Math.floor(Math.random() * 10000),
+        content,
+        createdAt: new Date().toISOString(),
+        read: false
+    });
+    textarea.value = '';
+    document.getElementById('noteCharCount').textContent = '0 / 200';
+    renderNotes();
+    await pushData();
+    btn.disabled = false;
+}
+
+function openNotePanel() {
+    document.getElementById('noteOverlay').classList.add('open');
+    renderNotes();
+}
+
+function closeNotePanel() {
+    document.getElementById('noteOverlay').classList.remove('open');
+}
+
+document.getElementById('noteFab').addEventListener('click', openNotePanel);
+document.getElementById('noteCloseBtn').addEventListener('click', closeNotePanel);
+document.getElementById('noteOverlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('noteOverlay')) closeNotePanel();
+});
+document.getElementById('noteSendBtn').addEventListener('click', sendNote);
+document.getElementById('noteTextarea').addEventListener('input', (e) => {
+    document.getElementById('noteCharCount').textContent = `${e.target.value.length} / 200`;
+});
+document.getElementById('noteTextarea').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) sendNote();
+});
+
+// 花瓣动画 - 每次4-6个优雅飘落
+(function createPetals() {
+    const pc = document.getElementById('petalsContainer');
+    if (!document.getElementById('petalFallCustomStyle')) {
+        const s = document.createElement('style');
+        s.id = 'petalFallCustomStyle';
+        s.textContent = `@keyframes petalFallCustom{0%{transform:translateY(0) rotate(0) translateX(0);opacity:0}10%{opacity:.5}90%{opacity:.5}100%{transform:translateY(110vh) rotate(720deg) translateX(var(--sway-x, 50px));opacity:0}}`;
+        document.head.appendChild(s);
+    }
+    const petalEmojis = ['🌸','💗','🌷','✨','🦋'];
+    const count = Math.floor(Math.random() * 3) + 4; // 每次4-6个
+    for(let i=0; i<count; i++) {
+        setTimeout(() => {
+            const el = document.createElement('div');
+            el.className = 'petal';
+            el.innerText = petalEmojis[Math.floor(Math.random() * petalEmojis.length)];
+            el.style.left = Math.random()*100 + 'vw';
+            el.style.fontSize = (Math.random()*8+14) + 'px';
+            el.style.animationDuration = (Math.random()*6+14) + 's'; // 14-20秒慢慢落
+            el.style.animationName = 'petalFallCustom';
+            el.style.animationFillMode = 'forwards';
+            el.style.setProperty('--sway-x', (Math.random()*100-50) + 'px');
+            pc.appendChild(el);
+            el.addEventListener('animationend', () => { 
+                el.remove();
+                // 花瓣快没了再生成
+                if (pc.children.length <= 2) {
+                    setTimeout(createPetals, Math.random()*4000 + 2000); 
+                }
+            });
+        }, i * (Math.random()*2000 + 1000)); // 每个花瓣间隔1-3秒依次出现
+    }
+})();
+
+// 修复移动端键盘收起后 viewport 高度未恢复导致布局偏移
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+        const isKeyboardOpen = window.visualViewport.height < window.innerHeight * 0.75;
+        if (!isKeyboardOpen) {
+            window.scrollTo(0, 0);
+        }
+    });
+}
+
+// 启动由密码验证通过后触发，此处不再自动调用
+</script>
+</body>
+</html>
